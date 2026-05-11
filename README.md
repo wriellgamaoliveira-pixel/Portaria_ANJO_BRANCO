@@ -12,6 +12,8 @@ Aplicação web com frontend estático para GitHub Pages e backend serverless em
 ## Variáveis de ambiente (Vercel)
 Veja `.env.example`.
 
+> Senha padrão de fallback: `Anjo@2026` (usada somente se `SENHA_MESTRA` não estiver configurada).
+
 ## Execução local
 ```bash
 npm install
