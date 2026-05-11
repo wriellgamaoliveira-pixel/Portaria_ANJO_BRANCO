@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portaria Transportadora</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="login-screen" class="login-screen">
+    <form id="login-form" class="login-card">
+      <h1>🚛 Portaria</h1>
+      <p>Digite a senha de acesso</p>
+      <input id="senha" type="password" placeholder="Senha" required />
+      <button type="submit">Entrar</button>
+      <p id="login-erro" class="erro"></p>
+    </form>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside id="sidebar" class="sidebar">
+      <h2>🚛 TRANSPORTADORA</h2>
+      <nav>
+        <button class="menu-btn active" data-screen="dashboard">📊 Dashboard</button>
+        <button class="menu-btn" data-screen="portaria">🚪 Portaria</button>
+        <button class="menu-btn" data-screen="historico">📋 Histórico</button>
+      </nav>
+      <button id="logout-btn" class="logout-btn">Sair</button>
+    </aside>
+
+    <main class="main">
+      <button id="hamburger" class="hamburger">☰</button>
+      <section id="dashboard" class="screen"></section>
+      <section id="portaria" class="screen hidden"></section>
+      <section id="historico" class="screen hidden"></section>
+    </main>
+  </div>
+
+  <div id="foto-modal" class="modal hidden">
+    <div class="modal-content">
+      <button id="fechar-modal" class="close">✕</button>
+      <img id="foto-modal-img" alt="Foto do hodômetro" />
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+:root{--azul:#1a237e;--laranja:#ff6f00;--fundo:#f3f4f8}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:var(--fundo);color:#222}
+.hidden{display:none!important}.app{display:flex;min-height:100vh}.sidebar{width:220px;background:var(--azul);color:#fff;padding:16px;position:fixed;top:0;bottom:0;left:0}
+.sidebar h2{font-size:28px;margin:8px 0 20px}.menu-btn{width:100%;text-align:left;padding:10px;margin-bottom:8px;background:transparent;border:none;color:#fff;border-radius:6px;cursor:pointer}
+.menu-btn.active,.menu-btn:hover{background:rgba(255,255,255,.15)}.logout-btn{position:absolute;bottom:20px;left:16px;right:16px;background:var(--laranja);color:#fff;border:0;padding:10px;border-radius:6px;cursor:pointer}
+.main{margin-left:220px;padding:20px;width:calc(100% - 220px)}.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.card{background:#fff;padding:14px;border-radius:10px;box-shadow:0 2px 8px #00000011}
+.table-wrap{overflow:auto;background:#fff;border-radius:10px;padding:10px;margin-top:14px}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #e6e6e6;text-align:left}
+.badge{padding:4px 8px;border-radius:12px;font-size:12px}.ok{background:#d5f4d7;color:#1b7a2f}.pend{background:#d8e8ff;color:#1456a1}
+button.primary{background:var(--laranja);color:#fff;border:0;padding:10px 14px;border-radius:6px;cursor:pointer}
+input,select{padding:10px;border:1px solid #ccc;border-radius:6px;width:100%}.form-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));background:#fff;padding:12px;border-radius:10px}
+.login-screen{min-height:100vh;display:grid;place-items:center}.login-card{background:#fff;padding:24px;border-radius:12px;box-shadow:0 4px 12px #0000001f;width:min(360px,92vw)}.login-card button{width:100%;background:var(--azul);color:#fff;border:0;padding:10px;border-radius:6px;margin-top:8px}
+.erro{color:#b00020;min-height:20px}.modal{position:fixed;inset:0;background:#0008;display:grid;place-items:center}.modal-content{background:#fff;padding:10px;border-radius:10px;max-width:92vw;max-height:92vh}.modal-content img{max-width:100%;max-height:80vh}.close{float:right;border:0;background:transparent;font-size:22px;cursor:pointer}
+.hamburger{display:none}
+@media (max-width: 900px){.sidebar{transform:translateX(-100%);transition:.2s}.sidebar.open{transform:translateX(0)}.main{margin-left:0;width:100%}.hamburger{display:inline-block;background:var(--azul);color:#fff;border:0;border-radius:6px;padding:8px 10px}}
