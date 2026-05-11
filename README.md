@@ -25,3 +25,8 @@ npm run dev
 2. Conecte o repositório à Vercel e configure `SENHA_MESTRA`, `JWT_SECRET`, `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` e opcionalmente `GITHUB_BRANCH`.
 3. Ative o GitHub Pages na branch `main`, pasta raiz.
 4. Acesse em `https://<seu-usuario>.github.io/<repo>`.
+
+## Importante sobre login no GitHub Pages
+- O frontend no GitHub Pages **não executa** funções `/api` por conta própria.
+- Defina `localStorage.api_base_url` apontando para sua Vercel (ex.: `https://seu-projeto.vercel.app`) para o login e registro funcionarem.
+- A URL do CSV agora é montada automaticamente no GitHub Pages (não pede mais prompt).
