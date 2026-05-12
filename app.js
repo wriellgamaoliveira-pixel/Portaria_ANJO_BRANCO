@@ -1,4 +1,12 @@
 /** @typedef {{data_hora:string,tipo:string,placa:string,motorista:string,km_entrada:string,km_saida:string,foto:string}} Registro */
+const APP_CONFIG = {
+  // Se o frontend estiver no GitHub Pages, informe aqui a URL da sua Vercel (sem barra no final).
+  // Exemplo: 'https://portaria-anjo-branco.vercel.app'
+  API_BASE_URL: '',
+  // Se quiser fixar manualmente a URL RAW do CSV, preencha aqui.
+  CSV_RAW_URL: ''
+};
+
 const state = { registros: [], token: localStorage.getItem('token') || '', rawBaseUrl: '', apiBaseUrl: '' };
 const el = (id) => document.getElementById(id);
 
@@ -13,10 +21,13 @@ function detectarRepoGitHubPages() {
 
 function configurarURLsAutomaticas() {
   const repoInfo = detectarRepoGitHubPages();
-  if (repoInfo) {
+  if (APP_CONFIG.CSV_RAW_URL) {
+    state.rawBaseUrl = APP_CONFIG.CSV_RAW_URL;
+  } else if (repoInfo) {
     state.rawBaseUrl = `https://raw.githubusercontent.com/${repoInfo.owner}/${repoInfo.repo}/main/dados/registros.csv`;
   }
-  state.apiBaseUrl = localStorage.getItem('api_base_url') || '';
+
+  state.apiBaseUrl = APP_CONFIG.API_BASE_URL || localStorage.getItem('api_base_url') || '';
 }
 
 function apiUrl(path) {
