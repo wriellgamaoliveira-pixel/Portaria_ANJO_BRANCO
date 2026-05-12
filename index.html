@@ -68,7 +68,8 @@ const $=id=>document.getElementById(id);
 const gid=()=>`${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
 const toast=(m)=>{const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)};
 const save=()=>localStorage.setItem(KEY_REG,JSON.stringify(state.registros));
-const load=()=>{state.registros=JSON.parse(localStorage.getItem(KEY_REG)||'[]')};
+const normalize=(r)=>({id:String(r?.id||gid()),data_hora:String(r?.data_hora||new Date().toISOString()),tipo:r?.tipo==='saida'?'saida':'entrada',placa:String(r?.placa||''),motorista:String(r?.motorista||''),km_entrada:r?.km_entrada===null||r?.km_entrada===''?null:Number(r.km_entrada),km_saida:r?.km_saida===null||r?.km_saida===''?null:Number(r.km_saida),foto:String(r?.foto||'')});
+const load=()=>{try{const raw=localStorage.getItem(KEY_REG)||'[]';const arr=JSON.parse(raw);state.registros=Array.isArray(arr)?arr.map(normalize).filter(r=>r.placa&&r.motorista):[];}catch(e){state.registros=[];localStorage.removeItem(KEY_REG);toast('⚠️ Dados locais corrompidos, reiniciados');}};
 const fmt=(iso)=>new Date(iso).toLocaleString('pt-BR');
 const badge=(t)=>`<span class="badge ${t}">${t==='entrada'?'Entrada':'Saída'}</span>`;
 const kmRod=(r)=> (r.km_entrada!=null && r.km_saida!=null)?(r.km_saida-r.km_entrada):0;
@@ -80,7 +81,7 @@ state.registros=[
 {id:gid(),data_hora:new Date(now-1*3600e3).toISOString(),tipo:'saida',placa:'ABC-1234',motorista:'João Silva',km_entrada:15000,km_saida:15300,foto:''}
 ];save();}
 
-function authUI(){const ok=localStorage.getItem(KEY_LOG)==='true';$('loginView').classList.toggle('hidden',ok);$('appView').classList.toggle('hidden',!ok);if(ok){load();renderAll();}}
+function authUI(){const ok=localStorage.getItem(KEY_LOG)==='true';$('loginView').classList.toggle('hidden',ok);$('appView').classList.toggle('hidden',!ok);if(ok){load();try{renderAll();}catch(err){console.error(err);toast('❌ Erro ao renderizar telas');}}}
 
 $('loginForm').addEventListener('submit',e=>{e.preventDefault();const s=$('senhaInput').value;if(s===SENHA_MESTRA){localStorage.setItem(KEY_LOG,'true');$('loginErro').textContent='';authUI();}else $('loginErro').textContent='Senha incorreta';});
 
@@ -145,6 +146,7 @@ function renderAll(){renderDashboard();renderPortaria();renderHistorico();render
 $('hambBtn').onclick=()=>$('sidebar').classList.toggle('open');
 document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));$(b.dataset.view).classList.remove('hidden');$('sidebar').classList.remove('open')});
 $('fotoModal').onclick=e=>{if(e.target.id==='fotoModal'||e.target.id==='closeFoto')$('fotoModal').classList.add('hidden')};
+window.addEventListener('error',()=>toast('❌ Erro inesperado no app'));
 seedIfEmpty();authUI();
 </script>
 </body>
