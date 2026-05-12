@@ -1,16 +1,64 @@
-<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Anjo Branco</title><style>body{margin:0;font-family:Arial;background:#071229;color:#dbeafe}.hidden{display:none}.login{min-height:100vh;display:grid;place-items:center}.box{background:#0f1b33;border:1px solid #2b446a;padding:16px;border-radius:12px;width:min(420px,95vw)}.input{width:100%;padding:10px;background:#0b162d;color:#fff;border:1px solid #35507a;border-radius:8px}.btn{padding:10px;border:0;border-radius:8px;background:#0b4a8b;color:#fff;cursor:pointer}.app{display:flex}.side{width:250px;min-height:100vh;background:#0f172a;padding:12px}.main{flex:1;padding:14px}.item{padding:10px;border-radius:8px;cursor:pointer}.item.active,.item:hover{background:#17284a}.card{background:#0f1b33;border:1px solid #223a62;border-radius:10px;padding:12px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.row{display:flex;gap:8px;flex-wrap:wrap}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #223a62}.dot{width:10px;height:10px;background:#22c55e;border-radius:50%;display:inline-block}</style></head><body>
-<div id='login' class='login'><form id='f' class='box'><h2>Anjo Branco</h2><div class='row'><label><input type='radio' name='m' value='mestra' checked> Senha Mestra</label><label><input type='radio' name='m' value='usuario'> Usuário e Senha</label></div><div id='uWrap' class='hidden'><input id='u' class='input' placeholder='Usuário'></div><input id='s' class='input' type='password' placeholder='Senha' style='margin-top:8px'><button class='btn' type='submit' style='width:100%;margin-top:8px'>Entrar</button><p id='e' style='color:#f87171'></p></form></div>
-<div id='app' class='app hidden'><aside class='side'><h3>Anjo Branco</h3><small>Transportadora</small><div id='menu'></div><div style='margin-top:auto;padding-top:16px'><small><span class='dot'></span> Online no Banco</small><br><button id='out' class='btn' style='margin-top:6px;width:100%'>Sair</button></div></aside><main class='main'><h2 id='title'></h2><div id='view'></div></main></div>
-<script>
-const K={users:'usuarios',log:'logado',reg:'portaria_registros',vei:'veiculos',mot:'motoristas',aju:'ajudantes',rot:'rotas'};
-const MENU={ADMINISTRADOR:['Dashboard','Lançar Portaria','Viagens em Aberto','Viagens Encerradas','Chegadas da Semana','Motorista/Ajudante','Motoristas','Ajudantes','Porteiros','Veículos','Rotas','Log de Cadastros','Configurações'],PORTARIA:['Dashboard','Lançar Portaria','Viagens em Aberto']};
-const $=id=>document.getElementById(id);const b64=s=>btoa(unescape(encodeURIComponent(s)));const get=k=>{try{return JSON.parse(localStorage.getItem(k)||'[]')}catch{return []}},set=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
-function init(){if(!localStorage.getItem(K.users))set(K.users,[{nome:'Administrador',login:'admin',tipo:'ADMINISTRADOR',status:'Ativo',senha:b64('Anjo@2026')},{nome:'Portaria',login:'portaria',tipo:'PORTARIA',status:'Ativo',senha:b64('portaria123')}]);for(const k of [K.reg,K.vei,K.mot,K.aju,K.rot])if(!localStorage.getItem(k))set(k,[]);if(sessionStorage.getItem(K.log)==='true'&&sessionStorage.getItem('user'))showApp(JSON.parse(sessionStorage.getItem('user')));}
-const uWrap=$('uWrap');document.querySelectorAll('input[name=m]').forEach(r=>r.onchange=()=>uWrap.classList.toggle('hidden',document.querySelector('input[name=m]:checked').value!=='usuario'));
-$('f').onsubmit=e=>{e.preventDefault();const mode=document.querySelector('input[name=m]:checked').value;const pwd=$('s').value;if(mode==='mestra'){if(pwd!=='Anjo@2026'){$('e').textContent='Senha mestra incorreta';return;}showApp({nome:'Mestre',tipo:'ADMINISTRADOR'});sessionStorage.setItem(K.log,'true');sessionStorage.setItem('user',JSON.stringify({nome:'Mestre',tipo:'ADMINISTRADOR'}));return;}const login=($('u').value||'').trim().toLowerCase();const u=get(K.users).find(x=>(x.login||'').toLowerCase()===login&&x.senha===b64(pwd));if(!u){$('e').textContent='Usuário ou senha incorretos';return;}sessionStorage.setItem(K.log,'true');sessionStorage.setItem('user',JSON.stringify(u));showApp(u)};
-function showApp(user){$('login').classList.add('hidden');$('app').classList.remove('hidden');const m=$('menu');m.innerHTML='';MENU[user.tipo].forEach((name,i)=>{const d=document.createElement('div');d.className='item'+(i===0?' active':'');d.textContent=name;d.onclick=()=>{document.querySelectorAll('.item').forEach(x=>x.classList.remove('active'));d.classList.add('active');openView(name)};m.appendChild(d)});openView('Dashboard');$('out').onclick=()=>{sessionStorage.clear();location.reload()}}
-function openView(n){$('title').textContent=n;const v=$('view');if(n==='Dashboard'){const r=get(K.reg);v.innerHTML=`<div class='cards'><div class='card'>Registros Hoje ${r.length}</div><div class='card'>Finalizadas ${r.filter(x=>x.data_chegada).length}</div><div class='card'>No Pátio ${r.filter(x=>!x.data_chegada).length}</div></div>`;return;}if(n==='Lançar Portaria'){v.innerHTML="<div class='card'><h3>Registro Portaria</h3><p>Saída e chegada funcionais.</p><button class='btn' onclick='novaSaida()'>Registrar Saída</button> <button class='btn' onclick='novaChegada()'>Registrar Chegada</button></div>";return;}if(n==='Viagens em Aberto'){const r=get(K.reg).filter(x=>!x.data_chegada);v.innerHTML=`<div class='card'><table><tr><th>Placa</th><th>Motorista</th><th>Saída</th></tr>${r.map(x=>`<tr><td>${x.placa}</td><td>${x.motorista||'-'}</td><td>${new Date(x.data_saida).toLocaleString('pt-BR')}</td></tr>`).join('')}</table></div>`;return;}if(['Motoristas','Ajudantes','Veículos','Rotas','Porteiros'].includes(n)){v.innerHTML='<div class="card"><div class="row"><button class="btn p">+ Novo</button><button class="btn">Exportar CSV</button><button class="btn">Importar CSV</button></div><table><tr><th>Nome</th><th>Status</th><th>Ações</th></tr><tr><td colspan="3">Sem registros. Cadastre clicando em + Novo.</td></tr></table></div>';return;}v.innerHTML='<div class="card">Relatório disponível após registros.</div>';}
-window.novaSaida=()=>{const placa=prompt('Placa');if(!placa)return;const motorista=prompt('Motorista')||'';const r=get(K.reg);r.push({id:Date.now(),placa:placa.toUpperCase(),motorista,data_saida:new Date().toISOString(),data_chegada:''});set(K.reg,r);openView('Dashboard')}
-window.novaChegada=()=>{const placa=prompt('Placa para chegada');const r=get(K.reg);const o=[...r].reverse().find(x=>x.placa===(placa||'').toUpperCase()&&!x.data_chegada);if(o)o.data_chegada=new Date().toISOString();set(K.reg,r);openView('Dashboard')}
-init();
-</script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Anjo Branco - Portaria</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <section id="login-screen" class="login-screen">
+    <form id="login-form" class="login-card">
+      <h1>Anjo Branco</h1>
+      <p>Acesso ao sistema de portaria</p>
+
+      <div class="row">
+        <label><input type="radio" name="modo-login" value="mestra" checked /> Senha Mestra</label>
+        <label><input type="radio" name="modo-login" value="usuario" /> Usuário e Senha</label>
+      </div>
+
+      <div id="usuario-wrap" class="hidden">
+        <input id="usuario" placeholder="Usuário" autocomplete="username" />
+      </div>
+      <input id="senha" type="password" placeholder="Senha" autocomplete="current-password" required />
+      <button type="submit">Entrar</button>
+      <p id="login-erro" class="erro"></p>
+    </form>
+  </section>
+
+  <div id="app" class="app hidden">
+    <aside id="sidebar" class="sidebar">
+      <h2>ANJO</h2>
+      <small>Transportadora</small>
+      <nav>
+        <button class="menu-btn active" data-screen="dashboard">Dashboard</button>
+        <button class="menu-btn" data-screen="portaria">Lançar Portaria</button>
+        <button class="menu-btn" data-screen="abertas">Viagens em Aberto</button>
+        <button class="menu-btn" data-screen="encerradas">Viagens Encerradas</button>
+        <button class="menu-btn" data-screen="relatorios">Relatórios</button>
+        <button class="menu-btn" data-screen="frotas">Frotas e Cadastros</button>
+      </nav>
+      <button id="logout-btn" class="logout-btn">Sair</button>
+    </aside>
+
+    <main class="main">
+      <button id="hamburger" class="hamburger" type="button">☰ Menu</button>
+      <section id="dashboard" class="screen"></section>
+      <section id="portaria" class="screen hidden"></section>
+      <section id="abertas" class="screen hidden"></section>
+      <section id="encerradas" class="screen hidden"></section>
+      <section id="relatorios" class="screen hidden"></section>
+      <section id="frotas" class="screen hidden"></section>
+    </main>
+  </div>
+
+  <div id="foto-modal" class="modal hidden">
+    <div class="modal-content">
+      <button id="fechar-modal" class="close" type="button">×</button>
+      <img id="foto-modal-img" alt="Foto do registro" />
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
