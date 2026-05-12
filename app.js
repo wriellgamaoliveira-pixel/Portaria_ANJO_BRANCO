@@ -4,6 +4,7 @@ const APP_CONFIG = {
   STORAGE_KEY: 'portaria_registros'
 };
 
+const APP_VERSION = '2026-05-12-local-static';
 const state = { registros: [], token: localStorage.getItem('token') || '' };
 const el = (id) => document.getElementById(id);
 
@@ -21,6 +22,7 @@ async function login(senha) {
 }
 
 function initAuthUI() {
+  const t=document.title; if(!t.includes(APP_VERSION)) document.title=`${t} - ${APP_VERSION}`;
   el('login-screen').classList.toggle('hidden', !!state.token);
   el('app').classList.toggle('hidden', !state.token);
   if (state.token) { carregarLocal(); renderAll(); }
