@@ -23,6 +23,11 @@ async function syncCadastroRepo(modulo) {
   await fetch('/api/cadastro', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ modulo, csv }) });
 }
 
+
+async function salvarRegistroOnline(registro, fotoBase64) {
+  await fetch('/api/registro', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ registro, foto_base64: fotoBase64 || '' }) });
+}
+
 async function syncRegistrosRepo() {
   const headers = ['data_hora','tipo','placa','motorista','km_entrada','km_saida','foto','unidade'];
   const regs = loadJSON(APP_CONFIG.STORAGE_KEY);
@@ -193,14 +198,17 @@ function renderPortaria() {
       foto = `data:${file.type};base64,${btoa(String.fromCharCode(...new Uint8Array(b)))}`;
     }
 
+    let registroOnline;
     if (tipoSel === 'entrada') {
       const aberto = [...state.registros].reverse().find((r) => r.placa === placa && !r.km_saida);
-      if (aberto) { aberto.km_saida = km; aberto.data_hora_chegada = agora(); if (foto) aberto.foto = foto; }
-      else state.registros.push({ data_hora_saida:'', data_hora_chegada:agora(), data_hora:agora(), tipo: 'entrada', placa, motorista, km_entrada: '', km_saida: km, foto, unidade: state.unidade, operacao, rota, transporte, ajudante, vigia, carrinho });
+      if (aberto) { aberto.km_saida = km; aberto.data_hora_chegada = agora(); if (foto) aberto.foto = foto; registroOnline = aberto; }
+      else { registroOnline = { data_hora_saida:'', data_hora_chegada:agora(), data_hora:agora(), tipo: 'entrada', placa, motorista, km_entrada: '', km_saida: km, foto, unidade: state.unidade, operacao, rota, transporte, ajudante, vigia, carrinho }; state.registros.push(registroOnline);}
     } else {
-      state.registros.push({ data_hora_saida:agora(), data_hora_chegada:'', data_hora:agora(), tipo: 'saida', placa, motorista, km_entrada: km, km_saida: '', foto, unidade: state.unidade, operacao, rota, transporte, ajudante, vigia, carrinho });
+      registroOnline = { data_hora_saida:agora(), data_hora_chegada:'', data_hora:agora(), tipo: 'saida', placa, motorista, km_entrada: km, km_saida: '', foto, unidade: state.unidade, operacao, rota, transporte, ajudante, vigia, carrinho };
+      state.registros.push(registroOnline);
     }
 
+    salvarRegistroOnline(registroOnline, foto).catch(()=>{});
     salvarRegistros();
     renderAll();
     el('msg-portaria').textContent = 'Lançamento salvo com sucesso.';
@@ -222,7 +230,7 @@ function renderViagens() {
     return `<tr>
       <td><input type='checkbox' class='sel-${tipo}' data-idx='${globalIndex}'></td>
       <td>${r.data_hora || '-'}</td><td>${r.placa || '-'}</td><td>${r.motorista || '-'}</td>
-      <td>${r.km_entrada || '-'}</td><td>${r.km_saida || '-'}</td>
+      <td>${r.km_entrada || '-'}</td><td>${r.km_saida || 'AG. CHEG.'}</td>
       <td><button type='button' class='primary btn-small' data-edit='${globalIndex}'>Editar</button>
       <button type='button' class='primary btn-small danger' data-del='${globalIndex}'>Excluir</button></td>
     </tr>`;
