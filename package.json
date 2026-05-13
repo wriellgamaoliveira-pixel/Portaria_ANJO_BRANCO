@@ -1,0 +1,22 @@
+{
+  "name": "portaria-anjo-branco",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de controle de portaria para transportadora com GitHub Pages + Vercel Functions",
+  "scripts": {
+    "build": "tsc",
+    "dev": "vercel dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@octokit/rest": "^21.1.1",
+    "dotenv": "^16.5.0",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.15.18",
+    "@vercel/node": "^5.3.6",
+    "typescript": "^5.8.3"
+  }
+}

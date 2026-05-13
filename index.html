@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Anjo Branco - Portaria</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <section id="login-screen" class="login-screen">
+    <form id="login-form" class="login-card">
+      <h1>Anjo Branco</h1>
+      <p>Acesso ao sistema de portaria</p>
+
+      <div class="row">
+        <label><input type="radio" name="modo-login" value="mestra" checked /> Senha Mestra</label>
+        <label><input type="radio" name="modo-login" value="usuario" /> Usuário e Senha</label>
+      </div>
+
+      <div id="usuario-wrap" class="hidden">
+        <input id="usuario" placeholder="Usuário" autocomplete="username" />
+      </div>
+      <input id="senha" type="password" placeholder="Senha" autocomplete="current-password" required />
+      <button type="submit">Entrar</button>
+      <p id="login-erro" class="erro"></p>
+    </form>
+  </section>
+
+  <div id="app" class="app hidden">
+    <aside id="sidebar" class="sidebar">
+      <h2>ANJO</h2>
+      <small>Transportadora</small>
+      <nav>
+        <button class="menu-btn active" data-screen="dashboard">Dashboard</button>
+        <button class="menu-btn" data-screen="portaria">Lançar Portaria</button>
+        <button class="menu-btn" data-screen="abertas">Viagens em Aberto</button>
+        <button class="menu-btn" data-screen="encerradas">Viagens Encerradas</button>
+        <button class="menu-btn" data-screen="relatorios">Relatórios</button>
+        <button class="menu-btn" data-screen="frotas">Cadastros</button>
+      </nav>
+      <button id="logout-btn" class="logout-btn">Sair</button>
+    </aside>
+
+    <main class="main">
+      <button id="hamburger" class="hamburger" type="button">☰ Menu</button>
+      <section id="dashboard" class="screen"></section>
+      <section id="portaria" class="screen hidden"></section>
+      <section id="abertas" class="screen hidden"></section>
+      <section id="encerradas" class="screen hidden"></section>
+      <section id="relatorios" class="screen hidden"></section>
+      <section id="frotas" class="screen hidden"></section>
+    </main>
+  </div>
+
+  <div id="foto-modal" class="modal hidden">
+    <div class="modal-content">
+      <button id="fechar-modal" class="close" type="button">×</button>
+      <img id="foto-modal-img" alt="Foto do registro" />
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

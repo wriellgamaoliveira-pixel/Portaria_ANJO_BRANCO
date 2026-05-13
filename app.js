@@ -1,0 +1,498 @@
+const APP_CONFIG = {
+  SENHA_MESTRA: 'Anjo@2026',
+  STORAGE_KEY: 'portaria_registros',
+  USERS_KEY: 'usuarios',
+  VEHICLES_KEY: 'veiculos',
+  DRIVERS_KEY: 'motoristas',
+  HELPERS_KEY: 'ajudantes',
+  ROUTES_KEY: 'rotas'
+};
+
+const state = { registros: [], token: sessionStorage.getItem('token') || '', user: null, unidade: 'BA' };
+const el = (id) => document.getElementById(id);
+const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
+
+const loadJSON = (k, fallback = []) => {
+  try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(fallback)); }
+  catch { return fallback; }
+};
+const saveJSON = (k, value) => localStorage.setItem(k, JSON.stringify(value));
+
+const API_BASE = localStorage.getItem('api_base_url') || '';
+async function apiFetch(path, payload) {
+  const url = `${API_BASE}${path}`;
+  const resp = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  const ct = resp.headers.get('content-type') || '';
+  const data = ct.includes('application/json') ? await resp.json() : { erro: await resp.text() };
+  if (!resp.ok) throw new Error(data.erro || `HTTP ${resp.status}`);
+  return data;
+}
+
+async function syncCadastroRepo(modulo) {
+  const csv = toCSVSimple(loadJSON(modulo));
+  await apiFetch('/api/cadastro', { modulo, csv });
+}
+
+
+async function salvarRegistroOnline(registro, fotoBase64) {
+  await apiFetch('/api/registro', { registro, foto_base64: fotoBase64 || '' });
+}
+
+async function syncRegistrosRepo() {
+  const headers = ['data_hora','tipo','placa','motorista','km_entrada','km_saida','foto','unidade'];
+  const regs = loadJSON(APP_CONFIG.STORAGE_KEY);
+  const csv = [headers.join(';'), ...regs.map((r) => headers.map((h) => String(r[h] ?? '')).join(';'))].join('\n');
+  await apiFetch('/api/registros_sync', { csv });
+}
+
+function bootstrap() {
+  if (!localStorage.getItem(APP_CONFIG.USERS_KEY)) {
+    saveJSON(APP_CONFIG.USERS_KEY, [
+      { nome: 'Administrador', login: 'admin', tipo: 'ADMINISTRADOR', status: 'Ativo', senha: b64('Anjo@2026') },
+      { nome: 'Portaria', login: 'portaria', tipo: 'PORTARIA', status: 'Ativo', senha: b64('portaria123') }
+    ]);
+  }
+  [APP_CONFIG.STORAGE_KEY, APP_CONFIG.VEHICLES_KEY, APP_CONFIG.DRIVERS_KEY, APP_CONFIG.HELPERS_KEY, APP_CONFIG.ROUTES_KEY]
+    .forEach((k) => { if (!localStorage.getItem(k)) saveJSON(k, []); });
+}
+
+function login(mode, user, senha) {
+  if (mode === 'mestra') {
+    if (senha !== APP_CONFIG.SENHA_MESTRA) throw new Error('Senha mestra inválida.');
+    state.user = { nome: 'Mestre', tipo: 'ADMINISTRADOR' };
+  } else {
+    const users = loadJSON(APP_CONFIG.USERS_KEY);
+    const found = users.find((u) => (u.login || '').toLowerCase() === user.toLowerCase() && u.senha === b64(senha));
+    if (!found) throw new Error('Usuário ou senha inválidos.');
+    state.user = found;
+  }
+  state.token = 'local-auth-ok';
+  sessionStorage.setItem('token', state.token);
+  sessionStorage.setItem('user', JSON.stringify(state.user));
+}
+
+function initAuthUI() {
+  const sessionUser = sessionStorage.getItem('user');
+  if (state.token && sessionUser) state.user = JSON.parse(sessionUser);
+
+  el('login-screen').classList.toggle('hidden', !!state.token);
+  el('app').classList.toggle('hidden', !state.token);
+
+  if (state.token) {
+    state.registros = loadJSON(APP_CONFIG.STORAGE_KEY);
+    renderAll();
+  }
+}
+
+function salvarRegistros() { saveJSON(APP_CONFIG.STORAGE_KEY, state.registros); syncRegistrosRepo().catch(()=>{}); }
+function agora() { return new Date().toISOString().slice(0, 16).replace('T', ' '); }
+
+function renderDashboard() {
+  const total = state.registros.length;
+  const finalizadas = state.registros.filter((r) => r.km_saida).length;
+  const patio = total - finalizadas;
+  const kmTotal = state.registros.reduce((acc, r) => acc + ((+r.km_saida || 0) - (+r.km_entrada || 0)), 0);
+
+  el('dashboard').innerHTML = `
+    <h1>Dashboard</h1>
+    <div class='card-grid'>
+      <div class='card'><b>Total Registros</b><h2>${total}</h2></div>
+      <div class='card'><b>Viagens Finalizadas</b><h2>${finalizadas}</h2></div>
+      <div class='card'><b>Veículos no Pátio</b><h2>${patio}</h2></div>
+      <div class='card'><b>KM Rodado</b><h2>${kmTotal.toLocaleString('pt-BR')}</h2></div>
+    </div>`;
+}
+
+function renderPortaria() {
+  el('portaria').innerHTML = `
+    <div class='portaria-tablet'>
+      <div class='portaria-header'>
+        <div>
+          <h1>REGISTRO PORTARIA</h1>
+          <p>${new Date().toLocaleDateString('pt-BR')} • ${new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</p>
+        </div>
+        <div class='mini-switch'>
+          <button type='button' class='mini active' data-unidade='BA'>BA</button><button type='button' class='mini' data-unidade='TO'>TO</button><button type='button' class='mini' data-unidade='TODAS'>TODAS</button>
+        </div>
+      </div>
+
+      <div class='segmented'>
+        <button type='button' class='seg active' data-tipo='saida'>↪ SAÍDA</button>
+        <button type='button' class='seg' data-tipo='entrada'>↩ CHEGADA</button>
+      </div>
+
+      <div class='segmented subtipo'>
+        <button type='button' class='seg active'>VIAGEM</button>
+        <button type='button' class='seg'>MANUTENÇÃO</button>
+        <button type='button' class='seg'>ABASTECIMENTO</button>
+      </div>
+
+      <div class='retro-box'>
+        <div><strong>MODO RETROATIVO</strong><small>Permitir ajuste manual de data/hora/km</small></div>
+        <label class='toggle'><input id='retroativo' type='checkbox'><span></span></label>
+      </div>
+
+      <form id='portaria-form' class='tablet-grid'>
+        <label>PLACA<input id='placa' list='lista-placas' placeholder='Buscar Placa...' required /><datalist id='lista-placas'></datalist></label>
+        <label>OPERAÇÃO
+          <select id='operacao'>
+            <option value='Viagem'>Selecione...</option><option>Viagem</option><option>Manutenção</option><option>Abastecimento</option>
+          </select>
+        </label>
+        <label>KM SAÍDA<input id='km' type='number' placeholder='Automático' required /></label>
+        <label>ROTA<input id='rota' list='lista-rotas' placeholder='Buscar Destino...' /><datalist id='lista-rotas'></datalist></label>
+
+        <label>N° TRANSPORTE<input id='transporte' placeholder='Opcional' /></label>
+        <label>MOTORISTA<input id='motorista' list='lista-motoristas' placeholder='Buscar Motorista...' required /><datalist id='lista-motoristas'></datalist></label>
+        <label>AJUDANTE<input id='ajudante' list='lista-ajudantes' placeholder='Buscar Ajudante (Opcional)...' /><datalist id='lista-ajudantes'></datalist></label>
+
+        <label>VIGIA RESP.
+          <select id='vigia'><option>Selecione...</option><option>Porteiro 1</option><option>Porteiro 2</option></select>
+        </label>
+        <label>CARRINHO PALLET
+          <select id='pallet'><option>Selecione...</option><option>Sim</option><option>Não</option></select>
+        </label>
+
+        <div class='tablet-actions'>
+          <label class='file-btn'>📷 CÂMERA<input id='foto' type='file' accept='image/*' capture='environment' /></label>
+          <label class='file-btn'>📎 ANEXAR<input id='anexo' type='file' accept='image/*,.pdf' /></label>
+        </div>
+        <button class='primary big-submit' type='submit'>✅ REGISTRAR SAÍDA</button>
+      </form>
+      <p id='msg-portaria'></p>
+    </div>`;
+
+  el('portaria').querySelectorAll('.segmented .seg[data-tipo]').forEach((b) => {
+    b.addEventListener('click', () => {
+      el('portaria').querySelectorAll('.segmented .seg[data-tipo]').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      el('km').placeholder = b.dataset.tipo === 'entrada' ? 'KM Chegada' : 'Automático';
+      el('portaria').querySelector('.big-submit').textContent = b.dataset.tipo === 'entrada' ? '✅ REGISTRAR CHEGADA' : '✅ REGISTRAR SAÍDA';
+    });
+  });
+
+  el('portaria').querySelectorAll('.mini[data-unidade]').forEach((b) => {
+    b.addEventListener('click', () => {
+      el('portaria').querySelectorAll('.mini[data-unidade]').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      state.unidade = b.dataset.unidade || 'BA';
+    });
+  });
+
+
+  const motoristas = loadJSON(APP_CONFIG.DRIVERS_KEY);
+  const ajudantes = loadJSON(APP_CONFIG.HELPERS_KEY);
+  const rotas = loadJSON(APP_CONFIG.ROUTES_KEY);
+  const veiculos = loadJSON(APP_CONFIG.VEHICLES_KEY);
+  el('lista-motoristas').innerHTML = motoristas.map((m) => `<option value='${m['Motorista'] || m.nome || ''}'>`).join('');
+  el('lista-ajudantes').innerHTML = ajudantes.map((a) => `<option value='${a['Ajudante'] || a['Motorista'] || a.nome || ''}'>`).join('');
+  el('lista-rotas').innerHTML = rotas.map((r) => `<option value='${r['nome'] || r['Rota'] || ''}'>`).join('');
+  el('lista-placas').innerHTML = veiculos.map((v) => `<option value='${v['Placa'] || v.placa || ''}'>`).join('');
+
+  el('portaria-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const tipoSel = el('portaria').querySelector('.segmented .seg[data-tipo].active')?.dataset.tipo || 'saida';
+    const placa = el('placa').value.trim().toUpperCase();
+    const motorista = el('motorista').value.trim();
+    const km = String(Number(el('km').value));
+    const operacao = el('operacao').value;
+    const rota = el('rota').value.trim();
+    const transporte = el('transporte').value.trim();
+    const ajudante = el('ajudante').value.trim();
+    const vigia = el('vigia').value;
+    const carrinho = el('pallet').value;
+    const file = el('foto').files?.[0];
+    let foto = '';
+    if (file) {
+      const b = await file.arrayBuffer();
+      foto = `data:${file.type};base64,${btoa(String.fromCharCode(...new Uint8Array(b)))}`;
+    }
+
+    let registroOnline;
+    if (tipoSel === 'entrada') {
+      const aberto = [...state.registros].reverse().find((r) => r.placa === placa && !r.km_saida);
+      if (aberto) { aberto.km_saida = km; aberto.data_hora_chegada = agora(); if (foto) aberto.foto = foto; registroOnline = aberto; }
+      else { registroOnline = { data_hora_saida:'', data_hora_chegada:agora(), data_hora:agora(), tipo: 'entrada', placa, motorista, km_entrada: '', km_saida: km, foto, unidade: state.unidade, operacao, rota, transporte, ajudante, vigia, carrinho }; state.registros.push(registroOnline);}
+    } else {
+      registroOnline = { data_hora_saida:agora(), data_hora_chegada:'', data_hora:agora(), tipo: 'saida', placa, motorista, km_entrada: km, km_saida: '', foto, unidade: state.unidade, operacao, rota, transporte, ajudante, vigia, carrinho };
+      state.registros.push(registroOnline);
+    }
+
+    salvarRegistroOnline(registroOnline, foto).catch(()=>{});
+    salvarRegistros();
+    renderAll();
+    el('msg-portaria').textContent = 'Lançamento salvo com sucesso.';
+  });
+}
+
+function drawTable(targetId, items, cols) {
+  const header = cols.map((c) => `<th>${c}</th>`).join('');
+  const rows = items.length ? items.map((row) => `<tr>${cols.map((c) => `<td>${row[c] ?? '-'}</td>`).join('')}</tr>`).join('') : `<tr><td colspan='${cols.length}'>Sem dados cadastrados.</td></tr>`;
+  el(targetId).innerHTML = `<div class='table-wrap'><table><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function renderViagens() {
+  const abertas = state.registros.filter((r) => !r.km_saida);
+  const encerradas = state.registros.filter((r) => !!r.km_saida);
+
+  const makeRows = (items, tipo) => items.length ? items.map((r,idx) => {
+    const globalIndex = state.registros.indexOf(r);
+    return `<tr>
+      <td><input type='checkbox' class='sel-${tipo}' data-idx='${globalIndex}'></td>
+      <td>${r.data_hora || '-'}</td><td>${r.placa || '-'}</td><td>${r.motorista || '-'}</td>
+      <td>${r.km_entrada || '-'}</td><td>${r.km_saida || 'AG. CHEG.'}</td>
+      <td><button type='button' class='primary btn-small' data-edit='${globalIndex}'>Editar</button>
+      <button type='button' class='primary btn-small danger' data-del='${globalIndex}'>Excluir</button></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan='7'>Sem viagens ${tipo}.</td></tr>`;
+
+  el('abertas').innerHTML = `<h1>Viagens em Aberto</h1>
+    <div class='table-wrap'><div class='lote-actions'>
+      <button type='button' class='primary btn-small' id='del-lote-abertas'>Excluir selecionadas</button></div>
+      <table><thead><tr><th></th><th>Data/Hora</th><th>Placa</th><th>Motorista</th><th>KM Entrada</th><th>KM Saída</th><th>Ações</th></tr></thead>
+      <tbody>${makeRows(abertas, 'abertas')}</tbody></table></div>`;
+
+  el('encerradas').innerHTML = `<h1>Viagens Encerradas</h1>
+    <div class='table-wrap'><div class='lote-actions'>
+      <button type='button' class='primary btn-small' id='del-lote-encerradas'>Excluir selecionadas</button></div>
+      <table><thead><tr><th></th><th>Data/Hora</th><th>Placa</th><th>Motorista</th><th>KM Entrada</th><th>KM Saída</th><th>Ações</th></tr></thead>
+      <tbody>${makeRows(encerradas, 'encerradas')}</tbody></table></div>`;
+
+  bindViagemActions();
+}
+
+function bindViagemActions() {
+  const editar = (idx) => {
+    const r = state.registros[idx]; if (!r) return;
+    const motorista = prompt('Motorista', r.motorista || ''); if (motorista === null) return;
+    const kmEntrada = prompt('KM Entrada', r.km_entrada || ''); if (kmEntrada === null) return;
+    const kmSaida = prompt('KM Saída (deixe vazio para aberta)', r.km_saida || ''); if (kmSaida === null) return;
+    r.motorista = motorista.trim();
+    r.km_entrada = kmEntrada.trim();
+    r.km_saida = kmSaida.trim();
+    salvarRegistros();
+    renderAll();
+  };
+
+  const excluir = (idx) => {
+    if (!confirm('Excluir esta viagem?')) return;
+    state.registros.splice(idx, 1);
+    salvarRegistros();
+    renderAll();
+  };
+
+  document.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => editar(Number(b.dataset.edit))));
+  document.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => excluir(Number(b.dataset.del))));
+
+  const excluirLote = (selector) => {
+    const idxs = [...document.querySelectorAll(selector+':checked')].map((i) => Number(i.dataset.idx)).sort((a,b)=>b-a);
+    if (!idxs.length) return alert('Selecione ao menos uma viagem.');
+    if (!confirm(`Excluir ${idxs.length} viagem(ns) selecionada(s)?`)) return;
+    idxs.forEach((i) => state.registros.splice(i,1));
+    salvarRegistros();
+    renderAll();
+  };
+
+  el('del-lote-abertas')?.addEventListener('click', () => excluirLote('.sel-abertas'));
+  el('del-lote-encerradas')?.addEventListener('click', () => excluirLote('.sel-encerradas'));
+}
+
+function renderRelatorios() {
+  const regs = [...state.registros].reverse();
+  const campos = [
+    {k:'data_hora_saida', l:'Data Saída'}, {k:'data_hora_chegada', l:'Data Chegada'}, {k:'operacao', l:'TIPO'},
+    {k:'placa', l:'PLACA'}, {k:'tipo', l:'OPERAÇÃO'}, {k:'km_entrada', l:'KM SAÍDA'}, {k:'rota', l:'ROTA'},
+    {k:'transporte', l:'N° TRANSPORTE'}, {k:'motorista', l:'MOTORISTA'}, {k:'ajudante', l:'AJUDANTE'},
+    {k:'vigia', l:'VIGIA RESP.'}, {k:'carrinho', l:'CARRINHO'}
+  ];
+
+  el('relatorios').innerHTML = `<h1>Relatórios</h1>
+    <div class='form-grid' id='filtros-rel'>${campos.map(c=>`<input data-f='${c.k}' placeholder='Filtrar ${c.l}' />`).join('')}</div>
+    <div class='lote-actions'><button id='baixar-rel-csv' class='primary btn-small'>Baixar CSV</button></div>
+    <div class='table-wrap'><table><thead><tr>${campos.map(c=>`<th>${c.l}</th>`).join('')}</tr></thead><tbody id='rel-body'></tbody></table></div>`;
+
+  const draw = () => {
+    const filtros = Object.fromEntries(campos.map(c => [c.k, (el('filtros-rel').querySelector(`[data-f="${c.k}"]`)?.value || '').toLowerCase()]));
+    const filtered = regs.filter((r) => campos.every((c) => String(r[c.k] || '').toLowerCase().includes(filtros[c.k])));
+    el('rel-body').innerHTML = filtered.map((r) => `<tr>${campos.map((c)=>`<td>${r[c.k] || '-'}</td>`).join('')}</tr>`).join('') || `<tr><td colspan='${campos.length}'>Sem registros.</td></tr>`;
+    return filtered;
+  };
+
+  el('filtros-rel').querySelectorAll('input').forEach((i) => i.addEventListener('input', draw));
+  el('baixar-rel-csv').onclick = () => {
+    const filtered = draw();
+    const csv = [campos.map(c=>c.l).join(';'), ...filtered.map((r)=>campos.map((c)=>String(r[c.k] || '')).join(';'))].join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='relatorio_portaria.csv'; a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  draw();
+}
+
+function parseCSVSimple(txt) {
+  const lines = (txt || '').trim().split(/\r?\n/).filter(Boolean);
+  if (!lines.length) return [];
+  const headers = lines.shift().split(';').map((h) => h.trim());
+  return lines.map((ln) => {
+    const cols = ln.split(';');
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = (cols[i] || '').trim());
+    return obj;
+  });
+}
+
+function toCSVSimple(rows) {
+  if (!rows.length) return 'nome;status';
+  const headers = Object.keys(rows[0]);
+  return [headers.join(';'), ...rows.map((r) => headers.map((h) => String(r[h] ?? '')).join(';'))].join('\n');
+}
+
+function bindCadastroHandlers(chave, tableId, defaultFields) {
+  const dados = loadJSON(chave);
+  const cols = [...new Set([...(dados[0] ? Object.keys(dados[0]) : []), ...defaultFields])];
+
+  const render = () => {
+    const rows = loadJSON(chave);
+    const head = `<th><input type='checkbox' id='sel-all-cad'></th>` + cols.map((c) => `<th>${c}</th>`).join('');
+    const body = rows.length ? rows.map((r, idx) => `<tr><td><input type='checkbox' class='cad-sel' data-idx='${idx}'></td>${cols.map((c) => `<td>${r[c] ?? ''}</td>`).join('')}<td><button class='primary btn-small' data-edit-cad='${idx}' data-key='${chave}'>Editar</button><button class='primary btn-small danger' data-del-cad='${idx}' data-key='${chave}'>Excluir</button></td></tr>`).join('') : `<tr><td colspan='${cols.length+2}'>Sem registros.</td></tr>`;
+    el(tableId).innerHTML = `<table><thead><tr>${head}<th>Ações</th></tr></thead><tbody>${body}</tbody></table>`;
+    el('sel-all-cad')?.addEventListener('change', (e) => { el(tableId).querySelectorAll('.cad-sel').forEach((c) => c.checked = e.target.checked); });
+
+    el(tableId).querySelectorAll('[data-edit-cad]').forEach((b) => b.onclick = () => {
+      const arr = loadJSON(chave); const i = Number(b.dataset.editCad); const item = arr[i] || {};
+      cols.forEach((c) => { const v = prompt(`Editar ${c}`, item[c] ?? ''); if (v !== null) item[c] = v; });
+      arr[i] = item; saveJSON(chave, arr); syncCadastroRepo(chave).catch(()=>{}); render();
+    });
+    el(tableId).querySelectorAll('[data-del-cad]').forEach((b) => b.onclick = () => {
+      if (!confirm('Excluir cadastro?')) return;
+      const arr = loadJSON(chave); arr.splice(Number(b.dataset.delCad),1); saveJSON(chave, arr); syncCadastroRepo(chave).catch(()=>{}); render();
+    });
+  };
+
+  return {
+    add: () => { const n = {}; cols.forEach((c) => n[c] = prompt(`Novo ${c}`, '') || ''); const arr = loadJSON(chave); arr.push(n); saveJSON(chave, arr); syncCadastroRepo(chave).catch(()=>{}); render(); },
+    imp: async (file) => { const txt = await file.text(); saveJSON(chave, parseCSVSimple(txt)); syncCadastroRepo(chave).catch(()=>{}); render(); },
+    exp: () => { const blob = new Blob([toCSVSimple(loadJSON(chave))], {type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${chave}.csv`; a.click(); URL.revokeObjectURL(a.href); },
+    delSelecionados: (idxs) => { const arr=loadJSON(chave); idxs.sort((a,b)=>b-a).forEach(i=>arr.splice(i,1)); saveJSON(chave,arr); syncCadastroRepo(chave).catch(()=>{}); render(); },
+    delTodos: () => { saveJSON(chave, []); syncCadastroRepo(chave).catch(()=>{}); render(); },
+    render
+  };
+}
+
+function renderFrotas() {
+  el('frotas').innerHTML = `
+    <h1>Cadastros</h1>
+    <div class='cad-layout'>
+      <aside class='cad-menu'>
+        <h3>CADASTROS</h3>
+        <button class='menu-btn-cad active' data-cad='motoristas'>👤 Motoristas</button>
+        <button class='menu-btn-cad' data-cad='ajudantes'>👥 Ajudantes</button>
+        <button class='menu-btn-cad' data-cad='porteiros'>🛂 Porteiros</button>
+        <button class='menu-btn-cad' data-cad='veiculos'>🚚 Veículos</button>
+        <button class='menu-btn-cad' data-cad='rotas'>🗺️ Rotas</button>
+        <button class='menu-btn-cad' data-cad='log'>🧾 Log de Cadastros</button>
+      </aside>
+
+      <section class='cad-content'>
+        <div class='lote-actions'>
+          <button id='cad-add' class='primary btn-small'>Incluir manualmente</button>
+          <label class='primary btn-small' style='cursor:pointer'>Importar CSV<input id='cad-import' type='file' accept='.csv' style='display:none'></label>
+          <button id='cad-export' class='primary btn-small'>Exportar CSV</button>
+          <button id='cad-save-repo' class='primary btn-small'>Salvar no Repositório</button><button id='cad-api' class='primary btn-small'>Configurar API</button><button id='cad-del-sel' class='primary btn-small danger'>Excluir selecionados</button><button id='cad-del-all' class='primary btn-small danger'>Excluir tudo</button>
+        </div>
+        <div id='cad-table' class='table-wrap'></div>
+      </section>
+    </div>`;
+
+  const maps = {
+    motoristas: {key: APP_CONFIG.DRIVERS_KEY, fields:['Motorista','CNH','CNH - Categoria','CNH - Data de Validade','Fone 1']},
+    ajudantes: {key: APP_CONFIG.HELPERS_KEY, fields:['Motorista','Fone']},
+    porteiros: {key: APP_CONFIG.USERS_KEY, fields:['nome','login','tipo','status']},
+    veiculos: {key: APP_CONFIG.VEHICLES_KEY, fields:['Placa','Marca/Modelo','Ano','Cor','Hodômetro Atual']},
+    rotas: {key: APP_CONFIG.ROUTES_KEY, fields:['nome','origem','destino','km_estimado','tempo_estimado']},
+    log: {key: 'log_cadastros', fields:['data','acao','modulo','usuario']}
+  };
+  if (!localStorage.getItem('log_cadastros')) saveJSON('log_cadastros', []);
+
+  let atual = 'motoristas';
+  let handler = bindCadastroHandlers(maps[atual].key, 'cad-table', maps[atual].fields);
+  handler.render();
+
+  const swap = (tab) => {
+    atual = tab;
+    document.querySelectorAll('.menu-btn-cad').forEach((b) => b.classList.toggle('active', b.dataset.cad === tab));
+    handler = bindCadastroHandlers(maps[atual].key, 'cad-table', maps[atual].fields);
+    handler.render();
+  };
+
+  document.querySelectorAll('.menu-btn-cad').forEach((b) => b.onclick = () => swap(b.dataset.cad));
+  el('cad-add').onclick = () => handler.add();
+  el('cad-export').onclick = () => handler.exp();
+  el('cad-import').onchange = (e) => { const f = e.target.files?.[0]; if (f) handler.imp(f); };
+  el('cad-del-sel').onclick = () => { const idxs=[...el('cad-table').querySelectorAll('.cad-sel:checked')].map(x=>Number(x.dataset.idx)); if(!idxs.length) return alert('Selecione registros.'); if(confirm('Excluir selecionados?')) handler.delSelecionados(idxs); };
+  el('cad-del-all').onclick = () => { if(confirm('Excluir todos os registros deste cadastro?')) handler.delTodos(); };
+
+  el('cad-api').onclick = () => { const v = prompt('URL base da API (ex: https://SEU-PROJETO.vercel.app)', localStorage.getItem('api_base_url') || ''); if (v !== null) { localStorage.setItem('api_base_url', v.trim()); location.reload(); } };
+
+  el('cad-save-repo').onclick = async () => {
+    const key = maps[atual].key;
+    const csv = toCSVSimple(loadJSON(key));
+    try {
+      const j = await apiFetch('/api/cadastro', { modulo: key, csv });
+      alert(`CSV salvo no repositório em: ${j.path}`);
+    } catch (e) {
+      alert('Não foi possível salvar no repositório. Configure a URL da API (Vercel) em localStorage[api_base_url]. Erro: ' + e.message);
+    }
+  };
+}
+
+function renderAll() {
+  renderDashboard();
+  renderPortaria();
+  renderViagens();
+  renderRelatorios();
+  renderFrotas();
+}
+
+function setupNav() {
+  document.querySelectorAll('.menu-btn').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.menu-btn').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    document.querySelectorAll('.screen').forEach((s) => s.classList.add('hidden'));
+    el(b.dataset.screen).classList.remove('hidden');
+    el('sidebar').classList.remove('open');
+  }));
+  el('hamburger').onclick = () => el('sidebar').classList.toggle('open');
+}
+
+function setupLoginMode() {
+  document.querySelectorAll('input[name="modo-login"]').forEach((i) => i.addEventListener('change', () => {
+    const isUserMode = document.querySelector('input[name="modo-login"]:checked').value === 'usuario';
+    el('usuario-wrap').classList.toggle('hidden', !isUserMode);
+  }));
+}
+
+el('login-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const mode = document.querySelector('input[name="modo-login"]:checked').value;
+  try {
+    login(mode, el('usuario').value.trim(), el('senha').value);
+    el('login-erro').textContent = '';
+    initAuthUI();
+  } catch (err) {
+    el('login-erro').textContent = err.message;
+  }
+});
+
+el('logout-btn').onclick = () => {
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('user');
+  state.token = '';
+  state.user = null;
+  initAuthUI();
+};
+
+bootstrap();
+setupNav();
+setupLoginMode();
+initAuthUI();
