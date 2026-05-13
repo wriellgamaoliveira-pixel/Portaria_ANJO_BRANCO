@@ -8,7 +8,7 @@ const APP_CONFIG = {
   ROUTES_KEY: 'rotas'
 };
 
-const state = { registros: [], token: sessionStorage.getItem('token') || '', user: null };
+const state = { registros: [], token: sessionStorage.getItem('token') || '', user: null, unidade: 'BA' };
 const el = (id) => document.getElementById(id);
 const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
 
@@ -85,7 +85,7 @@ function renderPortaria() {
           <p>${new Date().toLocaleDateString('pt-BR')} • ${new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</p>
         </div>
         <div class='mini-switch'>
-          <button type='button' class='mini active'>BA</button><button type='button' class='mini'>TO</button><button type='button' class='mini'>TODAS</button>
+          <button type='button' class='mini active' data-unidade='BA'>BA</button><button type='button' class='mini' data-unidade='TO'>TO</button><button type='button' class='mini' data-unidade='TODAS'>TODAS</button>
         </div>
       </div>
 
@@ -144,6 +144,14 @@ function renderPortaria() {
     });
   });
 
+  el('portaria').querySelectorAll('.mini[data-unidade]').forEach((b) => {
+    b.addEventListener('click', () => {
+      el('portaria').querySelectorAll('.mini[data-unidade]').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      state.unidade = b.dataset.unidade || 'BA';
+    });
+  });
+
   el('portaria-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const tipoSel = el('portaria').querySelector('.segmented .seg[data-tipo].active')?.dataset.tipo || 'saida';
@@ -160,9 +168,9 @@ function renderPortaria() {
     if (tipoSel === 'entrada') {
       const aberto = [...state.registros].reverse().find((r) => r.placa === placa && !r.km_saida);
       if (aberto) { aberto.km_saida = km; if (foto) aberto.foto = foto; }
-      else state.registros.push({ data_hora: agora(), tipo: 'entrada', placa, motorista, km_entrada: '', km_saida: km, foto });
+      else state.registros.push({ data_hora: agora(), tipo: 'entrada', placa, motorista, km_entrada: '', km_saida: km, foto, unidade: state.unidade });
     } else {
-      state.registros.push({ data_hora: agora(), tipo: 'saida', placa, motorista, km_entrada: km, km_saida: '', foto });
+      state.registros.push({ data_hora: agora(), tipo: 'saida', placa, motorista, km_entrada: km, km_saida: '', foto, unidade: state.unidade });
     }
 
     salvarRegistros();
