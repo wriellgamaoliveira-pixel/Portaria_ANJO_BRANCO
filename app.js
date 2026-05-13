@@ -18,6 +18,18 @@ const loadJSON = (k, fallback = []) => {
 };
 const saveJSON = (k, value) => localStorage.setItem(k, JSON.stringify(value));
 
+async function syncCadastroRepo(modulo) {
+  const csv = toCSVSimple(loadJSON(modulo));
+  await fetch('/api/cadastro', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ modulo, csv }) });
+}
+
+async function syncRegistrosRepo() {
+  const headers = ['data_hora','tipo','placa','motorista','km_entrada','km_saida','foto','unidade'];
+  const regs = loadJSON(APP_CONFIG.STORAGE_KEY);
+  const csv = [headers.join(';'), ...regs.map((r) => headers.map((h) => String(r[h] ?? '')).join(';'))].join('\n');
+  await fetch('/api/registros_sync', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ csv }) });
+}
+
 function bootstrap() {
   if (!localStorage.getItem(APP_CONFIG.USERS_KEY)) {
     saveJSON(APP_CONFIG.USERS_KEY, [
@@ -57,7 +69,7 @@ function initAuthUI() {
   }
 }
 
-function salvarRegistros() { saveJSON(APP_CONFIG.STORAGE_KEY, state.registros); }
+function salvarRegistros() { saveJSON(APP_CONFIG.STORAGE_KEY, state.registros); syncRegistrosRepo().catch(()=>{}); }
 function agora() { return new Date().toISOString().slice(0, 16).replace('T', ' '); }
 
 function renderDashboard() {
@@ -292,25 +304,28 @@ function bindCadastroHandlers(chave, tableId, defaultFields) {
 
   const render = () => {
     const rows = loadJSON(chave);
-    const head = cols.map((c) => `<th>${c}</th>`).join('');
-    const body = rows.length ? rows.map((r, idx) => `<tr>${cols.map((c) => `<td>${r[c] ?? ''}</td>`).join('')}<td><button class='primary btn-small' data-edit-cad='${idx}' data-key='${chave}'>Editar</button><button class='primary btn-small danger' data-del-cad='${idx}' data-key='${chave}'>Excluir</button></td></tr>`).join('') : `<tr><td colspan='${cols.length+1}'>Sem registros.</td></tr>`;
+    const head = `<th><input type='checkbox' id='sel-all-cad'></th>` + cols.map((c) => `<th>${c}</th>`).join('');
+    const body = rows.length ? rows.map((r, idx) => `<tr><td><input type='checkbox' class='cad-sel' data-idx='${idx}'></td>${cols.map((c) => `<td>${r[c] ?? ''}</td>`).join('')}<td><button class='primary btn-small' data-edit-cad='${idx}' data-key='${chave}'>Editar</button><button class='primary btn-small danger' data-del-cad='${idx}' data-key='${chave}'>Excluir</button></td></tr>`).join('') : `<tr><td colspan='${cols.length+2}'>Sem registros.</td></tr>`;
     el(tableId).innerHTML = `<table><thead><tr>${head}<th>Ações</th></tr></thead><tbody>${body}</tbody></table>`;
+    el('sel-all-cad')?.addEventListener('change', (e) => { el(tableId).querySelectorAll('.cad-sel').forEach((c) => c.checked = e.target.checked); });
 
     el(tableId).querySelectorAll('[data-edit-cad]').forEach((b) => b.onclick = () => {
       const arr = loadJSON(chave); const i = Number(b.dataset.editCad); const item = arr[i] || {};
       cols.forEach((c) => { const v = prompt(`Editar ${c}`, item[c] ?? ''); if (v !== null) item[c] = v; });
-      arr[i] = item; saveJSON(chave, arr); render();
+      arr[i] = item; saveJSON(chave, arr); syncCadastroRepo(chave).catch(()=>{}); render();
     });
     el(tableId).querySelectorAll('[data-del-cad]').forEach((b) => b.onclick = () => {
       if (!confirm('Excluir cadastro?')) return;
-      const arr = loadJSON(chave); arr.splice(Number(b.dataset.delCad),1); saveJSON(chave, arr); render();
+      const arr = loadJSON(chave); arr.splice(Number(b.dataset.delCad),1); saveJSON(chave, arr); syncCadastroRepo(chave).catch(()=>{}); render();
     });
   };
 
   return {
-    add: () => { const n = {}; cols.forEach((c) => n[c] = prompt(`Novo ${c}`, '') || ''); const arr = loadJSON(chave); arr.push(n); saveJSON(chave, arr); render(); },
-    imp: async (file) => { const txt = await file.text(); saveJSON(chave, parseCSVSimple(txt)); render(); },
+    add: () => { const n = {}; cols.forEach((c) => n[c] = prompt(`Novo ${c}`, '') || ''); const arr = loadJSON(chave); arr.push(n); saveJSON(chave, arr); syncCadastroRepo(chave).catch(()=>{}); render(); },
+    imp: async (file) => { const txt = await file.text(); saveJSON(chave, parseCSVSimple(txt)); syncCadastroRepo(chave).catch(()=>{}); render(); },
     exp: () => { const blob = new Blob([toCSVSimple(loadJSON(chave))], {type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${chave}.csv`; a.click(); URL.revokeObjectURL(a.href); },
+    delSelecionados: (idxs) => { const arr=loadJSON(chave); idxs.sort((a,b)=>b-a).forEach(i=>arr.splice(i,1)); saveJSON(chave,arr); syncCadastroRepo(chave).catch(()=>{}); render(); },
+    delTodos: () => { saveJSON(chave, []); syncCadastroRepo(chave).catch(()=>{}); render(); },
     render
   };
 }
@@ -334,7 +349,7 @@ function renderFrotas() {
           <button id='cad-add' class='primary btn-small'>Incluir manualmente</button>
           <label class='primary btn-small' style='cursor:pointer'>Importar CSV<input id='cad-import' type='file' accept='.csv' style='display:none'></label>
           <button id='cad-export' class='primary btn-small'>Exportar CSV</button>
-          <button id='cad-save-repo' class='primary btn-small'>Salvar no Repositório</button>
+          <button id='cad-save-repo' class='primary btn-small'>Salvar no Repositório</button><button id='cad-del-sel' class='primary btn-small danger'>Excluir selecionados</button><button id='cad-del-all' class='primary btn-small danger'>Excluir tudo</button>
         </div>
         <div id='cad-table' class='table-wrap'></div>
       </section>
@@ -365,6 +380,9 @@ function renderFrotas() {
   el('cad-add').onclick = () => handler.add();
   el('cad-export').onclick = () => handler.exp();
   el('cad-import').onchange = (e) => { const f = e.target.files?.[0]; if (f) handler.imp(f); };
+  el('cad-del-sel').onclick = () => { const idxs=[...el('cad-table').querySelectorAll('.cad-sel:checked')].map(x=>Number(x.dataset.idx)); if(!idxs.length) return alert('Selecione registros.'); if(confirm('Excluir selecionados?')) handler.delSelecionados(idxs); };
+  el('cad-del-all').onclick = () => { if(confirm('Excluir todos os registros deste cadastro?')) handler.delTodos(); };
+
   el('cad-save-repo').onclick = async () => {
     const key = maps[atual].key;
     const csv = toCSVSimple(loadJSON(key));
