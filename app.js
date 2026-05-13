@@ -180,8 +180,67 @@ function drawTable(targetId, items, cols) {
 function renderViagens() {
   const abertas = state.registros.filter((r) => !r.km_saida);
   const encerradas = state.registros.filter((r) => !!r.km_saida);
-  drawTable('abertas', abertas, ['data_hora', 'placa', 'motorista', 'km_entrada']);
-  drawTable('encerradas', encerradas, ['data_hora', 'placa', 'motorista', 'km_entrada', 'km_saida']);
+
+  const makeRows = (items, tipo) => items.length ? items.map((r,idx) => {
+    const globalIndex = state.registros.indexOf(r);
+    return `<tr>
+      <td><input type='checkbox' class='sel-${tipo}' data-idx='${globalIndex}'></td>
+      <td>${r.data_hora || '-'}</td><td>${r.placa || '-'}</td><td>${r.motorista || '-'}</td>
+      <td>${r.km_entrada || '-'}</td><td>${r.km_saida || '-'}</td>
+      <td><button type='button' class='primary btn-small' data-edit='${globalIndex}'>Editar</button>
+      <button type='button' class='primary btn-small danger' data-del='${globalIndex}'>Excluir</button></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan='7'>Sem viagens ${tipo}.</td></tr>`;
+
+  el('abertas').innerHTML = `<h1>Viagens em Aberto</h1>
+    <div class='table-wrap'><div class='lote-actions'>
+      <button type='button' class='primary btn-small' id='del-lote-abertas'>Excluir selecionadas</button></div>
+      <table><thead><tr><th></th><th>Data/Hora</th><th>Placa</th><th>Motorista</th><th>KM Entrada</th><th>KM Saída</th><th>Ações</th></tr></thead>
+      <tbody>${makeRows(abertas, 'abertas')}</tbody></table></div>`;
+
+  el('encerradas').innerHTML = `<h1>Viagens Encerradas</h1>
+    <div class='table-wrap'><div class='lote-actions'>
+      <button type='button' class='primary btn-small' id='del-lote-encerradas'>Excluir selecionadas</button></div>
+      <table><thead><tr><th></th><th>Data/Hora</th><th>Placa</th><th>Motorista</th><th>KM Entrada</th><th>KM Saída</th><th>Ações</th></tr></thead>
+      <tbody>${makeRows(encerradas, 'encerradas')}</tbody></table></div>`;
+
+  bindViagemActions();
+}
+
+function bindViagemActions() {
+  const editar = (idx) => {
+    const r = state.registros[idx]; if (!r) return;
+    const motorista = prompt('Motorista', r.motorista || ''); if (motorista === null) return;
+    const kmEntrada = prompt('KM Entrada', r.km_entrada || ''); if (kmEntrada === null) return;
+    const kmSaida = prompt('KM Saída (deixe vazio para aberta)', r.km_saida || ''); if (kmSaida === null) return;
+    r.motorista = motorista.trim();
+    r.km_entrada = kmEntrada.trim();
+    r.km_saida = kmSaida.trim();
+    salvarRegistros();
+    renderAll();
+  };
+
+  const excluir = (idx) => {
+    if (!confirm('Excluir esta viagem?')) return;
+    state.registros.splice(idx, 1);
+    salvarRegistros();
+    renderAll();
+  };
+
+  document.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => editar(Number(b.dataset.edit))));
+  document.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => excluir(Number(b.dataset.del))));
+
+  const excluirLote = (selector) => {
+    const idxs = [...document.querySelectorAll(selector+':checked')].map((i) => Number(i.dataset.idx)).sort((a,b)=>b-a);
+    if (!idxs.length) return alert('Selecione ao menos uma viagem.');
+    if (!confirm(`Excluir ${idxs.length} viagem(ns) selecionada(s)?`)) return;
+    idxs.forEach((i) => state.registros.splice(i,1));
+    salvarRegistros();
+    renderAll();
+  };
+
+  el('del-lote-abertas')?.addEventListener('click', () => excluirLote('.sel-abertas'));
+  el('del-lote-encerradas')?.addEventListener('click', () => excluirLote('.sel-encerradas'));
 }
 
 function renderRelatorios() {
