@@ -18,21 +18,31 @@ const loadJSON = (k, fallback = []) => {
 };
 const saveJSON = (k, value) => localStorage.setItem(k, JSON.stringify(value));
 
+const API_BASE = localStorage.getItem('api_base_url') || '';
+async function apiFetch(path, payload) {
+  const url = `${API_BASE}${path}`;
+  const resp = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  const ct = resp.headers.get('content-type') || '';
+  const data = ct.includes('application/json') ? await resp.json() : { erro: await resp.text() };
+  if (!resp.ok) throw new Error(data.erro || `HTTP ${resp.status}`);
+  return data;
+}
+
 async function syncCadastroRepo(modulo) {
   const csv = toCSVSimple(loadJSON(modulo));
-  await fetch('/api/cadastro', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ modulo, csv }) });
+  await apiFetch('/api/cadastro', { modulo, csv });
 }
 
 
 async function salvarRegistroOnline(registro, fotoBase64) {
-  await fetch('/api/registro', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ registro, foto_base64: fotoBase64 || '' }) });
+  await apiFetch('/api/registro', { registro, foto_base64: fotoBase64 || '' });
 }
 
 async function syncRegistrosRepo() {
   const headers = ['data_hora','tipo','placa','motorista','km_entrada','km_saida','foto','unidade'];
   const regs = loadJSON(APP_CONFIG.STORAGE_KEY);
   const csv = [headers.join(';'), ...regs.map((r) => headers.map((h) => String(r[h] ?? '')).join(';'))].join('\n');
-  await fetch('/api/registros_sync', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ csv }) });
+  await apiFetch('/api/registros_sync', { csv });
 }
 
 function bootstrap() {
@@ -388,7 +398,7 @@ function renderFrotas() {
           <button id='cad-add' class='primary btn-small'>Incluir manualmente</button>
           <label class='primary btn-small' style='cursor:pointer'>Importar CSV<input id='cad-import' type='file' accept='.csv' style='display:none'></label>
           <button id='cad-export' class='primary btn-small'>Exportar CSV</button>
-          <button id='cad-save-repo' class='primary btn-small'>Salvar no Repositório</button><button id='cad-del-sel' class='primary btn-small danger'>Excluir selecionados</button><button id='cad-del-all' class='primary btn-small danger'>Excluir tudo</button>
+          <button id='cad-save-repo' class='primary btn-small'>Salvar no Repositório</button><button id='cad-api' class='primary btn-small'>Configurar API</button><button id='cad-del-sel' class='primary btn-small danger'>Excluir selecionados</button><button id='cad-del-all' class='primary btn-small danger'>Excluir tudo</button>
         </div>
         <div id='cad-table' class='table-wrap'></div>
       </section>
@@ -422,16 +432,16 @@ function renderFrotas() {
   el('cad-del-sel').onclick = () => { const idxs=[...el('cad-table').querySelectorAll('.cad-sel:checked')].map(x=>Number(x.dataset.idx)); if(!idxs.length) return alert('Selecione registros.'); if(confirm('Excluir selecionados?')) handler.delSelecionados(idxs); };
   el('cad-del-all').onclick = () => { if(confirm('Excluir todos os registros deste cadastro?')) handler.delTodos(); };
 
+  el('cad-api').onclick = () => { const v = prompt('URL base da API (ex: https://SEU-PROJETO.vercel.app)', localStorage.getItem('api_base_url') || ''); if (v !== null) { localStorage.setItem('api_base_url', v.trim()); location.reload(); } };
+
   el('cad-save-repo').onclick = async () => {
     const key = maps[atual].key;
     const csv = toCSVSimple(loadJSON(key));
     try {
-      const r = await fetch('/api/cadastro', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modulo: key, csv }) });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.erro || 'Falha ao salvar');
+      const j = await apiFetch('/api/cadastro', { modulo: key, csv });
       alert(`CSV salvo no repositório em: ${j.path}`);
     } catch (e) {
-      alert('Não foi possível salvar no repositório: ' + e.message);
+      alert('Não foi possível salvar no repositório. Configure a URL da API (Vercel) em localStorage[api_base_url]. Erro: ' + e.message);
     }
   };
 }
