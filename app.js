@@ -78,20 +78,75 @@ function renderDashboard() {
 
 function renderPortaria() {
   el('portaria').innerHTML = `
-    <h1>Lançar Portaria</h1>
-    <form id='portaria-form' class='form-grid'>
-      <select id='tipo'><option value='entrada'>Entrada</option><option value='saida'>Saída</option></select>
-      <input id='placa' placeholder='Placa' required />
-      <input id='motorista' placeholder='Motorista' required />
-      <input id='km' type='number' placeholder='KM atual' required />
-      <input id='foto' type='file' accept='image/*' capture='environment' />
-      <button class='primary' type='submit'>Salvar Registro</button>
-    </form>
-    <p id='msg-portaria'></p>`;
+    <div class='portaria-tablet'>
+      <div class='portaria-header'>
+        <div>
+          <h1>REGISTRO PORTARIA</h1>
+          <p>${new Date().toLocaleDateString('pt-BR')} • ${new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</p>
+        </div>
+        <div class='mini-switch'>
+          <button type='button' class='mini active'>BA</button><button type='button' class='mini'>TO</button><button type='button' class='mini'>TODAS</button>
+        </div>
+      </div>
+
+      <div class='segmented'>
+        <button type='button' class='seg active' data-tipo='saida'>↪ SAÍDA</button>
+        <button type='button' class='seg' data-tipo='entrada'>↩ CHEGADA</button>
+      </div>
+
+      <div class='segmented subtipo'>
+        <button type='button' class='seg active'>VIAGEM</button>
+        <button type='button' class='seg'>MANUTENÇÃO</button>
+        <button type='button' class='seg'>ABASTECIMENTO</button>
+      </div>
+
+      <div class='retro-box'>
+        <div><strong>MODO RETROATIVO</strong><small>Permitir ajuste manual de data/hora/km</small></div>
+        <label class='toggle'><input id='retroativo' type='checkbox'><span></span></label>
+      </div>
+
+      <form id='portaria-form' class='tablet-grid'>
+        <label>PLACA<input id='placa' placeholder='Buscar Placa...' required /></label>
+        <label>OPERAÇÃO
+          <select id='operacao'>
+            <option value='Viagem'>Selecione...</option><option>Viagem</option><option>Manutenção</option><option>Abastecimento</option>
+          </select>
+        </label>
+        <label>KM SAÍDA<input id='km' type='number' placeholder='Automático' required /></label>
+        <label>ROTA<input id='rota' placeholder='Buscar Destino...' /></label>
+
+        <label>N° TRANSPORTE<input id='transporte' placeholder='Opcional' /></label>
+        <label>MOTORISTA<input id='motorista' placeholder='Buscar Motorista...' required /></label>
+        <label>AJUDANTE<input id='ajudante' placeholder='Buscar Ajudante (Opcional)...' /></label>
+
+        <label>VIGIA RESP.
+          <select id='vigia'><option>Selecione...</option><option>Porteiro 1</option><option>Porteiro 2</option></select>
+        </label>
+        <label>CARRINHO PALLET
+          <select id='pallet'><option>Selecione...</option><option>Sim</option><option>Não</option></select>
+        </label>
+
+        <div class='tablet-actions'>
+          <label class='file-btn'>📷 CÂMERA<input id='foto' type='file' accept='image/*' capture='environment' /></label>
+          <label class='file-btn'>📎 ANEXAR<input id='anexo' type='file' accept='image/*,.pdf' /></label>
+        </div>
+        <button class='primary big-submit' type='submit'>✅ REGISTRAR SAÍDA</button>
+      </form>
+      <p id='msg-portaria'></p>
+    </div>`;
+
+  el('portaria').querySelectorAll('.segmented .seg[data-tipo]').forEach((b) => {
+    b.addEventListener('click', () => {
+      el('portaria').querySelectorAll('.segmented .seg[data-tipo]').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      el('km').placeholder = b.dataset.tipo === 'entrada' ? 'KM Chegada' : 'Automático';
+      el('portaria').querySelector('.big-submit').textContent = b.dataset.tipo === 'entrada' ? '✅ REGISTRAR CHEGADA' : '✅ REGISTRAR SAÍDA';
+    });
+  });
 
   el('portaria-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const tipo = el('tipo').value;
+    const tipoSel = el('portaria').querySelector('.segmented .seg[data-tipo].active')?.dataset.tipo || 'saida';
     const placa = el('placa').value.trim().toUpperCase();
     const motorista = el('motorista').value.trim();
     const km = String(Number(el('km').value));
@@ -102,17 +157,17 @@ function renderPortaria() {
       foto = `data:${file.type};base64,${btoa(String.fromCharCode(...new Uint8Array(b)))}`;
     }
 
-    if (tipo === 'entrada') {
-      state.registros.push({ data_hora: agora(), tipo, placa, motorista, km_entrada: km, km_saida: '', foto });
-    } else {
+    if (tipoSel === 'entrada') {
       const aberto = [...state.registros].reverse().find((r) => r.placa === placa && !r.km_saida);
       if (aberto) { aberto.km_saida = km; if (foto) aberto.foto = foto; }
-      else state.registros.push({ data_hora: agora(), tipo, placa, motorista, km_entrada: '', km_saida: km, foto });
+      else state.registros.push({ data_hora: agora(), tipo: 'entrada', placa, motorista, km_entrada: '', km_saida: km, foto });
+    } else {
+      state.registros.push({ data_hora: agora(), tipo: 'saida', placa, motorista, km_entrada: km, km_saida: '', foto });
     }
 
     salvarRegistros();
     renderAll();
-    el('msg-portaria').textContent = 'Registro salvo com sucesso.';
+    el('msg-portaria').textContent = 'Lançamento salvo com sucesso.';
   });
 }
 
