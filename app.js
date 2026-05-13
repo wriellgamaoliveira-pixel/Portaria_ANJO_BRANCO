@@ -106,18 +106,18 @@ function renderPortaria() {
       </div>
 
       <form id='portaria-form' class='tablet-grid'>
-        <label>PLACA<input id='placa' placeholder='Buscar Placa...' required /></label>
+        <label>PLACA<input id='placa' list='lista-placas' placeholder='Buscar Placa...' required /><datalist id='lista-placas'></datalist></label>
         <label>OPERAÇÃO
           <select id='operacao'>
             <option value='Viagem'>Selecione...</option><option>Viagem</option><option>Manutenção</option><option>Abastecimento</option>
           </select>
         </label>
         <label>KM SAÍDA<input id='km' type='number' placeholder='Automático' required /></label>
-        <label>ROTA<input id='rota' placeholder='Buscar Destino...' /></label>
+        <label>ROTA<input id='rota' list='lista-rotas' placeholder='Buscar Destino...' /><datalist id='lista-rotas'></datalist></label>
 
         <label>N° TRANSPORTE<input id='transporte' placeholder='Opcional' /></label>
-        <label>MOTORISTA<input id='motorista' placeholder='Buscar Motorista...' required /></label>
-        <label>AJUDANTE<input id='ajudante' placeholder='Buscar Ajudante (Opcional)...' /></label>
+        <label>MOTORISTA<input id='motorista' list='lista-motoristas' placeholder='Buscar Motorista...' required /><datalist id='lista-motoristas'></datalist></label>
+        <label>AJUDANTE<input id='ajudante' list='lista-ajudantes' placeholder='Buscar Ajudante (Opcional)...' /><datalist id='lista-ajudantes'></datalist></label>
 
         <label>VIGIA RESP.
           <select id='vigia'><option>Selecione...</option><option>Porteiro 1</option><option>Porteiro 2</option></select>
@@ -151,6 +151,16 @@ function renderPortaria() {
       state.unidade = b.dataset.unidade || 'BA';
     });
   });
+
+
+  const motoristas = loadJSON(APP_CONFIG.DRIVERS_KEY);
+  const ajudantes = loadJSON(APP_CONFIG.HELPERS_KEY);
+  const rotas = loadJSON(APP_CONFIG.ROUTES_KEY);
+  const veiculos = loadJSON(APP_CONFIG.VEHICLES_KEY);
+  el('lista-motoristas').innerHTML = motoristas.map((m) => `<option value='${m['Motorista'] || m.nome || ''}'>`).join('');
+  el('lista-ajudantes').innerHTML = ajudantes.map((a) => `<option value='${a['Ajudante'] || a['Motorista'] || a.nome || ''}'>`).join('');
+  el('lista-rotas').innerHTML = rotas.map((r) => `<option value='${r['nome'] || r['Rota'] || ''}'>`).join('');
+  el('lista-placas').innerHTML = veiculos.map((v) => `<option value='${v['Placa'] || v.placa || ''}'>`).join('');
 
   el('portaria-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -331,11 +341,11 @@ function renderFrotas() {
     </div>`;
 
   const maps = {
-    motoristas: {key: APP_CONFIG.DRIVERS_KEY, fields:['nome','cnh','status']},
-    ajudantes: {key: APP_CONFIG.HELPERS_KEY, fields:['nome','status']},
+    motoristas: {key: APP_CONFIG.DRIVERS_KEY, fields:['Motorista','CNH','CNH - Categoria','CNH - Data de Validade','Fone 1']},
+    ajudantes: {key: APP_CONFIG.HELPERS_KEY, fields:['Motorista','Fone']},
     porteiros: {key: APP_CONFIG.USERS_KEY, fields:['nome','login','tipo','status']},
-    veiculos: {key: APP_CONFIG.VEHICLES_KEY, fields:['placa','modelo','status']},
-    rotas: {key: APP_CONFIG.ROUTES_KEY, fields:['nome','origem','destino','status']},
+    veiculos: {key: APP_CONFIG.VEHICLES_KEY, fields:['Placa','Marca/Modelo','Ano','Cor','Hodômetro Atual']},
+    rotas: {key: APP_CONFIG.ROUTES_KEY, fields:['nome','origem','destino','km_estimado','tempo_estimado']},
     log: {key: 'log_cadastros', fields:['data','acao','modulo','usuario']}
   };
   if (!localStorage.getItem('log_cadastros')) saveJSON('log_cadastros', []);
