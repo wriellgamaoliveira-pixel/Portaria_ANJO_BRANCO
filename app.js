@@ -180,6 +180,12 @@ function renderPortaria() {
     const placa = el('placa').value.trim().toUpperCase();
     const motorista = el('motorista').value.trim();
     const km = String(Number(el('km').value));
+    const operacao = el('operacao').value;
+    const rota = el('rota').value.trim();
+    const transporte = el('transporte').value.trim();
+    const ajudante = el('ajudante').value.trim();
+    const vigia = el('vigia').value;
+    const carrinho = el('pallet').value;
     const file = el('foto').files?.[0];
     let foto = '';
     if (file) {
@@ -189,10 +195,10 @@ function renderPortaria() {
 
     if (tipoSel === 'entrada') {
       const aberto = [...state.registros].reverse().find((r) => r.placa === placa && !r.km_saida);
-      if (aberto) { aberto.km_saida = km; if (foto) aberto.foto = foto; }
-      else state.registros.push({ data_hora: agora(), tipo: 'entrada', placa, motorista, km_entrada: '', km_saida: km, foto, unidade: state.unidade });
+      if (aberto) { aberto.km_saida = km; aberto.data_hora_chegada = agora(); if (foto) aberto.foto = foto; }
+      else state.registros.push({ data_hora_saida:'', data_hora_chegada:agora(), data_hora:agora(), tipo: 'entrada', placa, motorista, km_entrada: '', km_saida: km, foto, unidade: state.unidade, operacao, rota, transporte, ajudante, vigia, carrinho });
     } else {
-      state.registros.push({ data_hora: agora(), tipo: 'saida', placa, motorista, km_entrada: km, km_saida: '', foto, unidade: state.unidade });
+      state.registros.push({ data_hora_saida:agora(), data_hora_chegada:'', data_hora:agora(), tipo: 'saida', placa, motorista, km_entrada: km, km_saida: '', foto, unidade: state.unidade, operacao, rota, transporte, ajudante, vigia, carrinho });
     }
 
     salvarRegistros();
@@ -274,11 +280,36 @@ function bindViagemActions() {
 }
 
 function renderRelatorios() {
-  const ultimos = [...state.registros].slice(-20).reverse();
-  el('relatorios').innerHTML = `<h1>Relatórios</h1><p>Últimos 20 lançamentos:</p><div id='rel-table'></div>`;
-  drawTable('rel-table', ultimos, ['data_hora', 'tipo', 'placa', 'motorista', 'km_entrada', 'km_saida']);
-}
+  const regs = [...state.registros].reverse();
+  const campos = [
+    {k:'data_hora_saida', l:'Data Saída'}, {k:'data_hora_chegada', l:'Data Chegada'}, {k:'operacao', l:'TIPO'},
+    {k:'placa', l:'PLACA'}, {k:'tipo', l:'OPERAÇÃO'}, {k:'km_entrada', l:'KM SAÍDA'}, {k:'rota', l:'ROTA'},
+    {k:'transporte', l:'N° TRANSPORTE'}, {k:'motorista', l:'MOTORISTA'}, {k:'ajudante', l:'AJUDANTE'},
+    {k:'vigia', l:'VIGIA RESP.'}, {k:'carrinho', l:'CARRINHO'}
+  ];
 
+  el('relatorios').innerHTML = `<h1>Relatórios</h1>
+    <div class='form-grid' id='filtros-rel'>${campos.map(c=>`<input data-f='${c.k}' placeholder='Filtrar ${c.l}' />`).join('')}</div>
+    <div class='lote-actions'><button id='baixar-rel-csv' class='primary btn-small'>Baixar CSV</button></div>
+    <div class='table-wrap'><table><thead><tr>${campos.map(c=>`<th>${c.l}</th>`).join('')}</tr></thead><tbody id='rel-body'></tbody></table></div>`;
+
+  const draw = () => {
+    const filtros = Object.fromEntries(campos.map(c => [c.k, (el('filtros-rel').querySelector(`[data-f="${c.k}"]`)?.value || '').toLowerCase()]));
+    const filtered = regs.filter((r) => campos.every((c) => String(r[c.k] || '').toLowerCase().includes(filtros[c.k])));
+    el('rel-body').innerHTML = filtered.map((r) => `<tr>${campos.map((c)=>`<td>${r[c.k] || '-'}</td>`).join('')}</tr>`).join('') || `<tr><td colspan='${campos.length}'>Sem registros.</td></tr>`;
+    return filtered;
+  };
+
+  el('filtros-rel').querySelectorAll('input').forEach((i) => i.addEventListener('input', draw));
+  el('baixar-rel-csv').onclick = () => {
+    const filtered = draw();
+    const csv = [campos.map(c=>c.l).join(';'), ...filtered.map((r)=>campos.map((c)=>String(r[c.k] || '')).join(';'))].join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='relatorio_portaria.csv'; a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  draw();
+}
 
 function parseCSVSimple(txt) {
   const lines = (txt || '').trim().split(/\r?\n/).filter(Boolean);
