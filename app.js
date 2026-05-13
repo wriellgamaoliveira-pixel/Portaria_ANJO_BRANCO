@@ -249,28 +249,99 @@ function renderRelatorios() {
   drawTable('rel-table', ultimos, ['data_hora', 'tipo', 'placa', 'motorista', 'km_entrada', 'km_saida']);
 }
 
+
+function parseCSVSimple(txt) {
+  const lines = (txt || '').trim().split(/\r?\n/).filter(Boolean);
+  if (!lines.length) return [];
+  const headers = lines.shift().split(';').map((h) => h.trim());
+  return lines.map((ln) => {
+    const cols = ln.split(';');
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = (cols[i] || '').trim());
+    return obj;
+  });
+}
+
+function toCSVSimple(rows) {
+  if (!rows.length) return 'nome;status';
+  const headers = Object.keys(rows[0]);
+  return [headers.join(';'), ...rows.map((r) => headers.map((h) => String(r[h] ?? '')).join(';'))].join('\n');
+}
+
+function bindCadastroHandlers(chave, tableId, defaultFields) {
+  const dados = loadJSON(chave);
+  const cols = [...new Set([...(dados[0] ? Object.keys(dados[0]) : []), ...defaultFields])];
+
+  const render = () => {
+    const rows = loadJSON(chave);
+    const head = cols.map((c) => `<th>${c}</th>`).join('');
+    const body = rows.length ? rows.map((r, idx) => `<tr>${cols.map((c) => `<td>${r[c] ?? ''}</td>`).join('')}<td><button class='primary btn-small' data-edit-cad='${idx}' data-key='${chave}'>Editar</button><button class='primary btn-small danger' data-del-cad='${idx}' data-key='${chave}'>Excluir</button></td></tr>`).join('') : `<tr><td colspan='${cols.length+1}'>Sem registros.</td></tr>`;
+    el(tableId).innerHTML = `<table><thead><tr>${head}<th>Ações</th></tr></thead><tbody>${body}</tbody></table>`;
+
+    el(tableId).querySelectorAll('[data-edit-cad]').forEach((b) => b.onclick = () => {
+      const arr = loadJSON(chave); const i = Number(b.dataset.editCad); const item = arr[i] || {};
+      cols.forEach((c) => { const v = prompt(`Editar ${c}`, item[c] ?? ''); if (v !== null) item[c] = v; });
+      arr[i] = item; saveJSON(chave, arr); render();
+    });
+    el(tableId).querySelectorAll('[data-del-cad]').forEach((b) => b.onclick = () => {
+      if (!confirm('Excluir cadastro?')) return;
+      const arr = loadJSON(chave); arr.splice(Number(b.dataset.delCad),1); saveJSON(chave, arr); render();
+    });
+  };
+
+  return {
+    add: () => { const n = {}; cols.forEach((c) => n[c] = prompt(`Novo ${c}`, '') || ''); const arr = loadJSON(chave); arr.push(n); saveJSON(chave, arr); render(); },
+    imp: async (file) => { const txt = await file.text(); saveJSON(chave, parseCSVSimple(txt)); render(); },
+    exp: () => { const blob = new Blob([toCSVSimple(loadJSON(chave))], {type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${chave}.csv`; a.click(); URL.revokeObjectURL(a.href); },
+    render
+  };
+}
+
 function renderFrotas() {
-  const veiculos = loadJSON(APP_CONFIG.VEHICLES_KEY);
-  const motoristas = loadJSON(APP_CONFIG.DRIVERS_KEY);
-  const ajudantes = loadJSON(APP_CONFIG.HELPERS_KEY);
-  const rotas = loadJSON(APP_CONFIG.ROUTES_KEY);
-
   el('frotas').innerHTML = `
-    <h1>Frotas e Cadastros</h1>
-    <div class='card-grid'>
-      <div class='card'><b>Veículos importados:</b> ${veiculos.length}</div>
-      <div class='card'><b>Motoristas importados:</b> ${motoristas.length}</div>
-      <div class='card'><b>Ajudantes importados:</b> ${ajudantes.length}</div>
-      <div class='card'><b>Rotas importadas:</b> ${rotas.length}</div>
+    <h1>Cadastros</h1>
+    <div class='cadastro-nav'>
+      <button class='menu-btn-cad active' data-cad='motoristas'>Motoristas</button>
+      <button class='menu-btn-cad' data-cad='ajudantes'>Ajudantes</button>
+      <button class='menu-btn-cad' data-cad='porteiros'>Porteiros</button>
+      <button class='menu-btn-cad' data-cad='veiculos'>Veículos</button>
+      <button class='menu-btn-cad' data-cad='rotas'>Rotas</button>
+      <button class='menu-btn-cad' data-cad='log'>Log de Cadastros</button>
     </div>
-    <h3>Base recuperada do navegador (localStorage)</h3>
-    <div id='frotas-veiculos'></div>
-    <div id='frotas-motoristas'></div>
-    <div id='frotas-rotas'></div>`;
+    <div class='card'>
+      <div class='lote-actions'>
+        <button id='cad-add' class='primary btn-small'>Incluir manualmente</button>
+        <label class='primary btn-small' style='cursor:pointer'>Importar CSV<input id='cad-import' type='file' accept='.csv' style='display:none'></label>
+        <button id='cad-export' class='primary btn-small'>Exportar CSV</button>
+      </div>
+      <div id='cad-table' class='table-wrap'></div>
+    </div>
+    <p class='hint'>Os CSVs podem ser versionados no repositório via commit/deploy (ou via API GitHub já existente no projeto).</p>`;
 
-  drawTable('frotas-veiculos', veiculos, ['placa', 'modelo', 'status']);
-  drawTable('frotas-motoristas', motoristas, ['nome', 'cnh', 'status']);
-  drawTable('frotas-rotas', rotas, ['nome', 'origem', 'destino', 'status']);
+  const maps = {
+    motoristas: {key: APP_CONFIG.DRIVERS_KEY, fields:['nome','cnh','status']},
+    ajudantes: {key: APP_CONFIG.HELPERS_KEY, fields:['nome','status']},
+    porteiros: {key: APP_CONFIG.USERS_KEY, fields:['nome','login','tipo','status']},
+    veiculos: {key: APP_CONFIG.VEHICLES_KEY, fields:['placa','modelo','status']},
+    rotas: {key: APP_CONFIG.ROUTES_KEY, fields:['nome','origem','destino','status']},
+    log: {key: 'log_cadastros', fields:['data','acao','modulo','usuario']}
+  };
+  if (!localStorage.getItem('log_cadastros')) saveJSON('log_cadastros', []);
+
+  let atual = 'motoristas';
+  let handler = bindCadastroHandlers(maps[atual].key, 'cad-table', maps[atual].fields);
+  handler.render();
+
+  const swap = (tab) => {
+    atual = tab;
+    document.querySelectorAll('.menu-btn-cad').forEach((b) => b.classList.toggle('active', b.dataset.cad === tab));
+    handler = bindCadastroHandlers(maps[atual].key, 'cad-table', maps[atual].fields);
+    handler.render();
+  };
+  document.querySelectorAll('.menu-btn-cad').forEach((b) => b.onclick = () => swap(b.dataset.cad));
+  el('cad-add').onclick = () => handler.add();
+  el('cad-export').onclick = () => handler.exp();
+  el('cad-import').onchange = (e) => { const f=e.target.files?.[0]; if (f) handler.imp(f); };
 }
 
 function renderAll() {
