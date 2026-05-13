@@ -38,3 +38,10 @@ nav{margin-top:14px;display:grid;gap:6px}
 .menu-btn-cad{background:#0f2b54;color:#d9e6ff;border:1px solid #2f4f7d;padding:8px 12px;border-radius:8px;cursor:pointer}
 .menu-btn-cad.active{background:#1a4f94;color:#fff}
 .hint{font-size:12px;color:#5d6f8b}
+
+.cad-layout{display:grid;grid-template-columns:260px 1fr;gap:12px}
+.cad-menu{background:#0f203f;border:1px solid #2e4974;border-radius:10px;padding:12px;display:grid;gap:8px;align-content:start}
+.cad-menu h3{margin:0 0 6px;color:#9ec5ff;font-size:13px;letter-spacing:1px}
+.cad-content{min-width:0}
+.cad-menu .menu-btn-cad{width:100%;text-align:left}
+@media (max-width:900px){.cad-layout{grid-template-columns:1fr}.cad-menu{grid-template-columns:repeat(2,minmax(0,1fr))}.cad-menu h3{grid-column:1/-1}}
