@@ -299,7 +299,7 @@ function bindCadastroHandlers(chave, tableId, defaultFields) {
 
 function renderFrotas() {
   el('frotas').innerHTML = `
-    <h1>Cadastros</h1>
+    <h1>Cadastros</h1><p>Gerencie manualmente, importe/exporte CSV e salve no repositório.</p>
     <div class='cadastro-nav'>
       <button class='menu-btn-cad active' data-cad='motoristas'>Motoristas</button>
       <button class='menu-btn-cad' data-cad='ajudantes'>Ajudantes</button>
@@ -312,7 +312,7 @@ function renderFrotas() {
       <div class='lote-actions'>
         <button id='cad-add' class='primary btn-small'>Incluir manualmente</button>
         <label class='primary btn-small' style='cursor:pointer'>Importar CSV<input id='cad-import' type='file' accept='.csv' style='display:none'></label>
-        <button id='cad-export' class='primary btn-small'>Exportar CSV</button>
+        <button id='cad-export' class='primary btn-small'>Exportar CSV</button><button id='cad-save-repo' class='primary btn-small'>Salvar no Repositório</button>
       </div>
       <div id='cad-table' class='table-wrap'></div>
     </div>
@@ -342,6 +342,18 @@ function renderFrotas() {
   el('cad-add').onclick = () => handler.add();
   el('cad-export').onclick = () => handler.exp();
   el('cad-import').onchange = (e) => { const f=e.target.files?.[0]; if (f) handler.imp(f); };
+  el('cad-save-repo').onclick = async () => {
+    const key = maps[atual].key;
+    const csv = toCSVSimple(loadJSON(key));
+    try {
+      const r = await fetch('/api/cadastro', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({modulo:key, csv})});
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.erro || 'Falha ao salvar');
+      alert('Cadastro salvo no repositório com sucesso.');
+    } catch (e) {
+      alert('Não foi possível salvar no repositório: '+e.message);
+    }
+  };
 }
 
 function renderAll() {
